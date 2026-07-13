@@ -41,12 +41,6 @@
     }
   },
   "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/xBuildyTeam/ubase-installer/releases/latest/download/latest.json"
-      ],
-      "pubkey": "jaSv+eF7xj/+Y+pTtc5XwKlxiW9lIXRvA69ehZX9CdA="
-    },
     "shell": {
       "open": true
     },
