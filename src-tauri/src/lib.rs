@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 pub fn run() {
@@ -9,16 +9,16 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .setup(|app| {
             let handle = app.handle().clone();
-            
-            // Register deep link listener / trigger check
-            app.deep_link().on_open_url(move |urls| {
-                for url in urls {
+
+            // Register deep link listener — OpenUrlEvent has a .urls() method in Tauri v2
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
                     let url_str = url.to_string();
                     let _ = handle.emit("deep-link", url_str);
                 }
             });
 
-            // Create a System Tray / Status Tray
+            // System tray
             let tray_menu = tauri::menu::Menu::with_items(
                 app,
                 &[
