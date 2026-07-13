@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "identifier": "tech.ubase.installer",
   "build": {
-    "frontendDist": "../src",
-    "devUrl": "../src"
+    "frontendDist": "../src"
   },
   "app": {
     "windows": [
@@ -31,18 +30,17 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "updater": {
-      "active": true,
-      "endpoints": [
-        "https://github.com/Jonestowncity/ubase-installer/releases/latest/download/latest.json"
-      ],
-      "pubkey": "jaSv+eF7xj/+Y+pTtc5XwKlxiW9lIXRvA69ehZX9CdA="
-    },
     "macOS": {
       "entitlements": null
     }
   },
   "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/xBuildyTeam/ubase-installer/releases/latest/download/latest.json"
+      ],
+      "pubkey": "jaSv+eF7xj/+Y+pTtc5XwKlxiW9lIXRvA69ehZX9CdA="
+    },
     "shell": {
       "open": true
     },
