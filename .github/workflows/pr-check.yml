@@ -1,0 +1,45 @@
+name: "PR Check"
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Check Rust Formatting
+        run: cargo fmt --all -- --check
+        working-directory: src-tauri
+
+      - name: Run Clippy
+        run: cargo clippy -- -D warnings
+        working-directory: src-tauri
+
+      - name: Verify HTML File Exists
+        run: |
+          if [ ! -f "index.html" ] && [ ! -f "dist/index.html" ] && [ ! -f "public/index.html" ] && [ ! -f "src/index.html" ]; then
+            echo "Error: index.html was not found in common directories!"
+            exit 1
+          else
+            echo "Success: HTML entry point verified."
+          fi

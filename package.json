@@ -1,0 +1,20 @@
+{
+  "name": "ubase-installer",
+  "version": "1.0.0",
+  "description": "Cross-platform desktop installer for .ubase packets into Base44 apps",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
+    "@tauri-apps/plugin-fs": "^2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
