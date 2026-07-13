@@ -8,13 +8,13 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "uBase Installer",
         "width": 1100,
         "height": 750,
         "minWidth": 900,
         "minHeight": 600,
-        "resizable": true,
-        "label": "main"
+        "resizable": true
       }
     ],
     "security": {
@@ -32,9 +32,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "macOS": {
-      "entitlements": null
-    },
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper",
@@ -45,18 +42,6 @@
   "plugins": {
     "shell": {
       "open": true
-    },
-    "fs": {
-      "scope": [
-        "$APPDIR/*",
-        "$DOCUMENT/*",
-        "$DOWNLOAD/*"
-      ]
-    },
-    "deep-link": {
-      "schemes": [
-        "ubase"
-      ]
     }
   }
 }
