@@ -4,16 +4,178 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>uBase Installer</title>
-  <style>
-    body { background: #0f1117; color: #ffffff; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    h1 { font-size: 2rem; }
-    p { color: #aaa; }
-  </style>
+  <link rel="stylesheet" href="styles.css">
+  <script src="jszip.min.js"></script>
 </head>
 <body>
-  <div style="text-align:center">
-    <h1>✅ uBase Installer</h1>
-    <p>v1.0.0 — Window opened successfully</p>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo-area">
+        <img src="https://ubase.tech/logo.png" onerror="this.style.display='none'" alt="" style="width:32px;height:32px;border-radius:6px;">
+        <span class="logo-text">uBase</span>
+      </div>
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="marketplace">🌐 Marketplace</button>
+        <button class="nav-item" data-tab="install">📦 Install Packet</button>
+        <button class="nav-item" data-tab="history">📋 History</button>
+        <button class="nav-item" data-tab="settings">⚙️ Settings</button>
+      </nav>
+      <div class="sidebar-footer">
+        <span>v1.0.0</span>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- Marketplace Tab -->
+      <div id="marketplace-tab" class="tab-pane active">
+        <webview id="marketplace-webview" src="https://ubase.tech" style="width:100%;height:100%;border:none;"></webview>
+      </div>
+
+      <!-- Install Tab -->
+      <div id="install-tab" class="tab-pane">
+        <div class="tab-header">
+          <h2>Install a Packet</h2>
+          <p>Drag and drop a <code>.ubase</code> file to install it into your Base44 app.</p>
+        </div>
+
+        <!-- Deep link preload banner -->
+        <div id="preload-banner" class="alert alert-info" style="display:none;">
+          <span>📦 Packet preloaded from marketplace: <strong id="preload-url-text"></strong></span>
+          <button id="btn-accept-preload" class="btn btn-sm btn-primary">Load It</button>
+          <button id="btn-dismiss-preload" class="btn btn-sm btn-secondary">Dismiss</button>
+        </div>
+
+        <!-- Wizard Steps -->
+        <div class="wizard-steps">
+          <div class="step-indicator active" data-step="1">1. Upload</div>
+          <div class="step-indicator" data-step="2">2. Preview</div>
+          <div class="step-indicator" data-step="3">3. Target App</div>
+          <div class="step-indicator" data-step="4">4. Install</div>
+          <div class="step-indicator" data-step="5">5. Done</div>
+        </div>
+
+        <!-- Step 1: Dropzone -->
+        <div class="wizard-step active" id="step-1">
+          <div class="dropzone" id="dropzone">
+            <div class="dropzone-inner">
+              <div class="drop-icon">📦</div>
+              <p>Drag & drop a <code>.ubase</code> file here</p>
+              <p class="text-muted">or click to browse</p>
+            </div>
+          </div>
+          <input type="file" id="file-input" accept=".ubase,.zip" style="display:none;">
+        </div>
+
+        <!-- Step 2: Preview -->
+        <div class="wizard-step" id="step-2">
+          <div class="packet-meta card">
+            <h3 id="packet-name">Packet Name</h3>
+            <div class="meta-row"><span>Version:</span> <strong id="packet-version"></strong></div>
+            <div class="meta-row"><span>Author:</span> <strong id="packet-author"></strong></div>
+            <div class="meta-row"><span>Description:</span> <span id="packet-description"></span></div>
+            <div class="meta-row"><span>Files:</span> <ul id="packet-files"></ul></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h4>Install Prompt Preview</h4>
+              <button id="expand-prompt-btn" class="btn btn-sm btn-secondary" style="display:none;">Expand</button>
+            </div>
+            <pre id="prompt-preview" class="prompt-preview collapsed"></pre>
+          </div>
+          <div class="wizard-actions">
+            <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+            <button class="btn btn-primary" onclick="goToStep(3)">Continue →</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Target App -->
+        <div class="wizard-step" id="step-3">
+          <div class="card">
+            <h3>Select Target App</h3>
+            <p class="text-muted">Which Base44 app should this packet be installed into?</p>
+            <select id="target-app-select" class="form-control">
+              <option value="custom">Enter App ID manually...</option>
+            </select>
+            <div id="custom-app-group" style="margin-top:1rem;">
+              <label>App ID</label>
+              <input type="text" id="custom-app-input" class="form-control" placeholder="e.g. 69fd0d1e04e347cf57ca9473">
+            </div>
+          </div>
+          <div class="wizard-actions">
+            <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+            <button class="btn btn-primary" onclick="goToStep(4)">Continue →</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Confirm & Install -->
+        <div class="wizard-step" id="step-4">
+          <div class="card">
+            <h3>Confirm Installation</h3>
+            <div class="meta-row"><span>Packet:</span> <strong id="summary-packet"></strong></div>
+            <div class="meta-row"><span>Target App:</span> <strong id="summary-app"></strong></div>
+          </div>
+          <div class="progress-container" style="display:none;">
+            <div class="progress-bar-wrap"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
+            <p id="status-text" class="text-muted"></p>
+          </div>
+          <div class="wizard-actions">
+            <button class="btn btn-secondary" onclick="goToStep(3)">← Back</button>
+            <button id="btn-install" class="btn btn-primary btn-large">🚀 Install Now</button>
+          </div>
+        </div>
+
+        <!-- Step 5: Success -->
+        <div class="wizard-step" id="step-5">
+          <div class="success-screen">
+            <div class="success-icon">✅</div>
+            <h2>Packet Installed!</h2>
+            <p id="success-message"></p>
+            <div class="wizard-actions">
+              <button class="btn btn-primary" onclick="resetWizard()">Install Another</button>
+              <button class="btn btn-secondary" id="btn-view-history">View History</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div id="history-tab" class="tab-pane">
+        <div class="tab-header">
+          <h2>Installation History</h2>
+          <button id="btn-clear-history" class="btn btn-secondary btn-sm">Clear History</button>
+        </div>
+        <p id="no-history-msg" class="text-muted">No installations yet.</p>
+        <table class="history-table" style="display:none;">
+          <thead><tr><th>Packet</th><th>App ID</th><th>Date</th><th>Status</th></tr></thead>
+          <tbody id="history-table-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="settings-tab" class="tab-pane">
+        <div class="tab-header">
+          <h2>Settings</h2>
+        </div>
+        <div class="card">
+          <h3>Base44 API Key</h3>
+          <p class="text-muted">Required to send install prompts to your Base44 apps.</p>
+          <input type="password" id="api-key-input" class="form-control" placeholder="Enter your Base44 API key...">
+          <div class="wizard-actions" style="margin-top:1rem;">
+            <button id="btn-save-key" class="btn btn-primary">Save Key</button>
+            <button id="btn-test-connection" class="btn btn-secondary">Test Connection</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
   </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" style="display:none;"></div>
+
+  <script src="main.js"></script>
 </body>
 </html>

@@ -10,15 +10,16 @@
       {
         "label": "main",
         "title": "uBase Installer",
-        "width": 1100,
-        "height": 750,
+        "width": 1200,
+        "height": 800,
         "minWidth": 900,
         "minHeight": 600,
         "resizable": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "dangerousUseHttpScheme": false
     },
     "withGlobalTauri": true
   },
