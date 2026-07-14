@@ -294,15 +294,14 @@ async function runInstall() {
 
     setProgress(50, 'Sending install prompt...');
 
-    const agentId = '69fd12da185a6e091e5bea1c'; // xBuildy AI agent
     const prompt = state.selectedPacket.prompt;
     const packetName = state.selectedPacket.meta.name || 'Unknown Packet';
 
-    const body = JSON.stringify({
-      message: `Install this uBase packet into app ${appId}:\n\n${prompt}`
-    });
+    // Send prompt.md directly to the Base44 Builder for the target app
+    // This opens a builder conversation that interactively walks the user through install
+    const body = JSON.stringify({ message: prompt });
 
-    const response = await fetch(`https://api.base44.com/api/agents/${agentId}/messages`, {
+    const response = await fetch(`https://api.base44.com/api/apps/${appId}/builder/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -332,7 +331,7 @@ async function runInstall() {
     localStorage.setItem('ubase_history', JSON.stringify(state.history.slice(0, 100)));
 
     document.getElementById('success-message').textContent =
-      `"${packetName}" was sent to the builder for app ${appId}. Check your Base44 builder for the install conversation.`;
+      `"${packetName}" has been sent to your Base44 builder. Open app.base44.com and check the builder chat for ${appId} — it will ask you design and location questions to complete the install.`;
 
     goToStep(5);
   } catch (err) {
