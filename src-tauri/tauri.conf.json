@@ -18,8 +18,7 @@
       }
     ],
     "security": {
-      "csp": null,
-      "dangerousUseHttpScheme": false
+      "csp": null
     },
     "withGlobalTauri": true
   },
