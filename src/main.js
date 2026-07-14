@@ -1,761 +1,424 @@
-/**
- * uBase Installer - Main Frontend Logic
- */
+// uBase Installer — Main Logic
 
-// Global App State
 const state = {
   activeTab: 'marketplace',
   currentStep: 1,
   apiKey: localStorage.getItem('ubase_api_key') || '',
-  selectedPacket: null, // parsed .ubase file
-  selectedAppId: '69fd0d1e04e347cf57ca9473', // default InstaFi
-  customAppId: '',
-  deepLinkedUrl: null
+  selectedPacket: null,
+  selectedAppId: '69fd0d1e04e347cf57ca9473',
+  history: JSON.parse(localStorage.getItem('ubase_history') || '[]')
 };
 
-// DOM Elements
-const elements = {
-  navItems: document.querySelectorAll('.nav-item'),
-  tabPanes: document.querySelectorAll('.tab-pane'),
-  dropzone: document.getElementById('dropzone'),
-  fileInput: document.getElementById('file-input'),
-  wizardSteps: document.querySelectorAll('.wizard-step'),
-  stepIndicators: document.querySelectorAll('.step-indicator'),
-  
-  // Step 2 elements
-  packetName: document.getElementById('packet-name'),
-  packetVersion: document.getElementById('packet-version'),
-  packetAuthor: document.getElementById('packet-author'),
-  packetDescription: document.getElementById('packet-description'),
-  packetFiles: document.getElementById('packet-files'),
-  promptPreview: document.getElementById('prompt-preview'),
-  expandPromptBtn: document.getElementById('expand-prompt-btn'),
-  
-  // Step 3 elements
-  targetAppSelect: document.getElementById('target-app-select'),
-  customAppGroup: document.getElementById('custom-app-group'),
-  customAppInput: document.getElementById('custom-app-input'),
-  
-  // Step 4 elements
-  summaryPacket: document.getElementById('summary-packet'),
-  summaryApp: document.getElementById('summary-app'),
-  btnInstall: document.getElementById('btn-install'),
-  progressBar: document.getElementById('progress-bar'),
-  progressContainer: document.querySelector('.progress-container'),
-  statusText: document.getElementById('status-text'),
-  
-  // Step 5 elements
-  successMessage: document.getElementById('success-message'),
-  
-  // Settings
-  apiKeyInput: document.getElementById('api-key-input'),
-  btnSaveKey: document.getElementById('btn-save-key'),
-  btnTestConn: document.getElementById('btn-test-connection'),
-  
-  // History
-  historyTableBody: document.getElementById('history-table-body'),
-  btnClearHistory: document.getElementById('btn-clear-history'),
-  noHistoryMsg: document.getElementById('no-history-msg'),
-  
-  // Deep Link
-  preloadBanner: document.getElementById('preload-banner'),
-  preloadUrlText: document.getElementById('preload-url-text'),
-  btnAcceptPreload: document.getElementById('btn-accept-preload'),
-  btnDismissPreload: document.getElementById('btn-dismiss-preload'),
-  
-  // Navigation trigger btns
-  btnStartInstall: document.getElementById('btn-start-install'),
-  btnViewHistory: document.getElementById('btn-view-history')
-};
-
-// Initialize App
-function init() {
+// ── INIT ──────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
   setupNavigation();
+  setupDropzone();
+  setupStep3();
+  setupStep4();
   setupSettings();
-  setupDragAndDrop();
-  setupCollapsibles();
-  setupTargetAppDropdown();
   setupHistory();
-  setupDeepLinkListener();
-  
-  // Load initial settings
-  if (state.apiKey) {
-    elements.apiKeyInput.value = state.apiKey;
-  }
-}
 
-// Tab Navigation
-function setupNavigation() {
-  elements.navItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const tabId = item.getAttribute('data-tab');
-      switchTab(tabId);
+  if (state.apiKey) {
+    document.getElementById('api-key-input').value = state.apiKey;
+  }
+
+  // expand prompt btn
+  const expandBtn = document.getElementById('expand-prompt-btn');
+  if (expandBtn) {
+    expandBtn.addEventListener('click', () => {
+      const pre = document.getElementById('prompt-preview');
+      const isExpanded = pre.classList.contains('expanded');
+      if (isExpanded) {
+        pre.classList.remove('expanded');
+        expandBtn.textContent = 'Expand';
+      } else {
+        pre.classList.add('expanded');
+        expandBtn.textContent = 'Collapse';
+      }
     });
+  }
+});
+
+// ── NAV ──────────────────────────────────────────────
+function setupNavigation() {
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => switchTab(item.getAttribute('data-tab')));
   });
 
-  // Action links
-  if (elements.btnStartInstall) {
-    elements.btnStartInstall.addEventListener('click', () => {
-      resetWizard();
-      switchTab('install');
-    });
-  }
-  
-  if (elements.btnViewHistory) {
-    elements.btnViewHistory.addEventListener('click', () => {
-      switchTab('history');
-    });
-  }
+  const btnViewHistory = document.getElementById('btn-view-history');
+  if (btnViewHistory) btnViewHistory.addEventListener('click', () => switchTab('history'));
 }
 
 function switchTab(tabId) {
   state.activeTab = tabId;
-  
-  elements.navItems.forEach(item => {
-    if (item.getAttribute('data-tab') === tabId) {
-      item.classList.add('active');
-    } else {
-      item.classList.remove('active');
-    }
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-tab') === tabId);
   });
-  
-  elements.tabPanes.forEach(pane => {
-    if (pane.id === `${tabId}-tab`) {
-      pane.classList.add('active');
-    } else {
-      pane.classList.remove('active');
-    }
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.classList.toggle('active', pane.id === tabId + '-tab');
   });
+  if (tabId === 'history') renderHistory();
+}
 
-  if (tabId === 'history') {
-    renderHistory();
+// ── STEP PROGRESS ─────────────────────────────────────
+function updateStepProgress(step) {
+  for (let i = 1; i <= 5; i++) {
+    const dot = document.getElementById('sp-' + i);
+    const line = document.getElementById('sl-' + i);
+    if (!dot) continue;
+    dot.classList.remove('active', 'done');
+    if (i < step) dot.classList.add('done');
+    else if (i === step) dot.classList.add('active');
+    if (line) line.classList.toggle('done', i < step);
   }
 }
 
-// Settings tab logic
-function setupSettings() {
-  elements.btnSaveKey.addEventListener('click', () => {
-    const key = elements.apiKeyInput.value.trim();
-    state.apiKey = key;
-    localStorage.setItem('ubase_api_key', key);
-    showToast('API Key saved successfully!');
+window.goToStep = function(step) {
+  state.currentStep = step;
+  document.querySelectorAll('.wizard-step').forEach((el, idx) => {
+    el.classList.toggle('active', idx + 1 === step);
+  });
+  updateStepProgress(step);
+};
+
+window.resetWizard = function() {
+  state.selectedPacket = null;
+  document.getElementById('file-input').value = '';
+  goToStep(1);
+  switchTab('install');
+};
+
+// ── DROPZONE ──────────────────────────────────────────
+function setupDropzone() {
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+
+  // Click on dropzone (but not on the button itself to avoid double trigger)
+  dropzone.addEventListener('click', (e) => {
+    if (e.target.classList.contains('btn-browse')) return; // handled below
+    fileInput.click();
   });
 
-  elements.btnTestConn.addEventListener('click', async () => {
-    const key = elements.apiKeyInput.value.trim();
-    if (!key) {
-      showToast('Please enter an API Key first!', 'danger');
-      return;
-    }
-    
-    elements.btnTestConn.disabled = true;
-    elements.btnTestConn.textContent = 'Testing...';
-    
-    try {
-      // Test connection with one of the target apps (InstaFi)
-      const testAppId = '69fd0d1e04e347cf57ca9473';
-      const response = await fetch(`https://api.base44.com/api/apps/${testAppId}/status`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${key}`
-        }
-      });
-      
-      if (response.status === 401 || response.status === 403) {
-        showToast('Invalid API Key. Connection failed.', 'danger');
-      } else {
-        // Even if 404, it means we hit the server and auth succeeded (otherwise 401/403)
-        showToast('Connection test completed successfully!', 'success');
-      }
-    } catch (err) {
-      showToast('Network error or invalid server configuration.', 'danger');
-    } finally {
-      elements.btnTestConn.disabled = false;
-      elements.btnTestConn.textContent = 'Test Connection';
-    }
-  });
-}
-
-// File Drag & Drop Wizard Step 1
-function setupDragAndDrop() {
-  const dropzone = elements.dropzone;
-  const input = elements.fileInput;
-
-  dropzone.addEventListener('click', () => input.click());
+  // Browse button click
+  const browseBtn = dropzone.querySelector('.btn-browse');
+  if (browseBtn) {
+    browseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileInput.click();
+    });
+  }
 
   dropzone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropzone.classList.add('dragover');
   });
 
-  dropzone.addEventListener('dragleave', () => {
-    dropzone.classList.remove('dragover');
-  });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
 
   dropzone.addEventListener('drop', (e) => {
     e.preventDefault();
     dropzone.classList.remove('dragover');
-    if (e.dataTransfer.files.length > 0) {
-      handleSelectedFile(e.dataTransfer.files[0]);
-    }
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
   });
 
-  input.addEventListener('change', () => {
-    if (input.files.length > 0) {
-      handleSelectedFile(input.files[0]);
-    }
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
   });
 }
 
-// Handle .ubase / packet extraction
-async function handleSelectedFile(file) {
+async function handleFile(file) {
   if (!file.name.endsWith('.ubase') && !file.name.endsWith('.zip')) {
-    showToast('Invalid file format. Please upload a .ubase packet file.', 'danger');
+    showToast('Please upload a .ubase file.', 'danger');
     return;
   }
 
-  showToast('Reading packet contents...');
-  
+  showToast('Reading packet...');
+
   try {
-    const packetData = await parseUbaseFile(file);
-    state.selectedPacket = packetData;
-    
-    // Populate Step 2 UI
-    elements.packetName.textContent = packetData.meta.name || 'Unnamed Packet';
-    elements.packetVersion.textContent = packetData.meta.version || '1.0.0';
-    elements.packetAuthor.textContent = packetData.meta.author || 'Anonymous';
-    elements.packetDescription.textContent = packetData.meta.description || 'No description provided.';
-    
-    // Build file list
-    elements.packetFiles.innerHTML = '';
-    if (packetData.meta.files && Array.isArray(packetData.meta.files)) {
-      packetData.meta.files.forEach(f => {
-        const li = document.createElement('li');
-        li.textContent = f;
-        elements.packetFiles.appendChild(li);
+    const packet = await parseUbase(file);
+    state.selectedPacket = packet;
+
+    // Populate step 2
+    document.getElementById('packet-name').textContent = packet.meta.name || 'Unnamed Packet';
+    document.getElementById('packet-version').textContent = packet.meta.version || '1.0.0';
+    document.getElementById('packet-author').textContent = packet.meta.author_name || packet.meta.author || 'Unknown';
+    document.getElementById('packet-description').textContent = packet.meta.description || 'No description.';
+
+    const fileList = document.getElementById('packet-files');
+    fileList.innerHTML = '';
+    const files = packet.meta.files || packet.fileNames || [];
+    if (files.length > 0) {
+      files.forEach(f => {
+        const tag = document.createElement('span');
+        tag.className = 'file-tag';
+        tag.textContent = f;
+        fileList.appendChild(tag);
       });
     } else {
-      const li = document.createElement('li');
-      li.textContent = 'No file manifest found in meta.json';
-      elements.packetFiles.appendChild(li);
+      fileList.innerHTML = '<span style="color:var(--muted);font-size:12px;">No file manifest</span>';
     }
-    
-    // Prompt preview
-    const previewText = packetData.prompt.substring(0, 300);
-    elements.promptPreview.textContent = previewText + (packetData.prompt.length > 300 ? '...' : '');
-    elements.promptPreview.setAttribute('data-full-prompt', packetData.prompt);
-    elements.expandPromptBtn.style.display = packetData.prompt.length > 300 ? 'inline-block' : 'none';
-    elements.expandPromptBtn.textContent = 'Expand Prompt';
-    elements.promptPreview.classList.add('collapsed');
 
-    // Proceed to Step 2
+    const promptEl = document.getElementById('prompt-preview');
+    promptEl.textContent = packet.prompt || '(no prompt.md found)';
+    promptEl.classList.remove('expanded');
+
+    const expandBtn = document.getElementById('expand-prompt-btn');
+    expandBtn.style.display = (packet.prompt && packet.prompt.length > 200) ? 'inline-block' : 'none';
+    expandBtn.textContent = 'Expand';
+
     goToStep(2);
   } catch (err) {
     console.error(err);
-    showToast('Failed to parse .ubase packet. File may be corrupted.', 'danger');
+    showToast('Failed to read packet: ' + err.message, 'danger');
   }
 }
 
-// Extract meta.json and prompt.md
-async function parseUbaseFile(file) {
+async function parseUbase(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read file'));
     reader.onload = async (e) => {
       try {
-        const arrayBuffer = e.target.result;
-        // Load JSZip dynamically if it is loaded. JSZip must be in script tags.
         if (typeof JSZip === 'undefined') {
-          reject(new Error('JSZip is not loaded yet. Check your internet connection.'));
-          return;
-        }
-        
-        const zip = await JSZip.loadAsync(arrayBuffer);
-        
-        let metaFile = zip.file('meta.json');
-        let promptFile = zip.file('prompt.md');
-        
-        if (!metaFile) {
-          // Fallback search case-insensitive or deep paths
-          const keys = Object.keys(zip.files);
-          const metaKey = keys.find(k => k.toLowerCase().endsWith('meta.json'));
-          const promptKey = keys.find(k => k.toLowerCase().endsWith('prompt.md'));
-          if (metaKey) metaFile = zip.file(metaKey);
-          if (promptKey) promptFile = zip.file(promptKey);
-        }
-
-        if (!metaFile) {
-          reject(new Error('meta.json is missing in this .ubase packet.'));
+          reject(new Error('JSZip not loaded'));
           return;
         }
 
-        const metaText = await metaFile.async('string');
+        const zip = await JSZip.loadAsync(e.target.result);
+        const keys = Object.keys(zip.files);
+
+        // Find meta.json and prompt.md (case-insensitive, any depth)
+        const metaKey = keys.find(k => k.toLowerCase().endsWith('meta.json'));
+        const promptKey = keys.find(k => k.toLowerCase().endsWith('prompt.md'));
+
+        if (!metaKey) {
+          reject(new Error('meta.json not found in packet'));
+          return;
+        }
+
+        const metaText = await zip.file(metaKey).async('string');
         const meta = JSON.parse(metaText);
-        
-        let prompt = '';
-        if (promptFile) {
-          prompt = await promptFile.async('string');
-        } else {
-          prompt = `Install prompt for ${meta.name || 'this packet'}`;
-        }
-        
-        resolve({ meta, prompt, fileName: file.name });
+        const prompt = promptKey ? await zip.file(promptKey).async('string') : '';
+        const fileNames = keys.filter(k => !zip.files[k].dir);
+
+        resolve({ meta, prompt, fileNames, fileName: file.name });
       } catch (err) {
         reject(err);
       }
     };
-    reader.onerror = () => reject(new Error('File reading error.'));
     reader.readAsArrayBuffer(file);
   });
 }
 
-// Collapsible Viewer logic
-function setupCollapsibles() {
-  elements.expandPromptBtn.addEventListener('click', () => {
-    const isCollapsed = elements.promptPreview.classList.contains('collapsed');
-    const fullPrompt = elements.promptPreview.getAttribute('data-full-prompt');
-    
-    if (isCollapsed) {
-      elements.promptPreview.textContent = fullPrompt;
-      elements.promptPreview.classList.remove('collapsed');
-      elements.expandPromptBtn.textContent = 'Collapse';
-    } else {
-      elements.promptPreview.textContent = fullPrompt.substring(0, 300) + '...';
-      elements.promptPreview.classList.add('collapsed');
-      elements.expandPromptBtn.textContent = 'Expand Prompt';
-    }
-  });
-}
+// ── STEP 3 ────────────────────────────────────────────
+function setupStep3() {
+  const select = document.getElementById('target-app-select');
+  const customGroup = document.getElementById('custom-app-group');
+  if (!select) return;
 
-// Target App Dropdown and manual Input toggles
-function setupTargetAppDropdown() {
-  elements.targetAppSelect.addEventListener('change', (e) => {
-    const val = e.target.value;
-    if (val === 'custom') {
-      elements.customAppGroup.style.display = 'flex';
-      state.selectedAppId = '';
-    } else {
-      elements.customAppGroup.style.display = 'none';
-      state.selectedAppId = val;
-    }
+  select.addEventListener('change', () => {
+    const isCustom = select.value === 'custom';
+    customGroup.style.display = isCustom ? 'block' : 'none';
+    if (!isCustom) state.selectedAppId = select.value;
   });
 
-  elements.customAppInput.addEventListener('input', (e) => {
+  document.getElementById('custom-app-input').addEventListener('input', (e) => {
     state.selectedAppId = e.target.value.trim();
   });
 }
 
-// Wizard Step Navigation
-function goToStep(step) {
-  state.currentStep = step;
-  
-  // Update Wizard Steps Visibility
-  elements.wizardSteps.forEach(el => {
-    if (parseInt(el.getAttribute('data-step')) === step) {
-      el.classList.add('active');
-    } else {
-      el.classList.remove('active');
+// ── STEP 4 ────────────────────────────────────────────
+function setupStep4() {
+  const btnInstall = document.getElementById('btn-install');
+  if (!btnInstall) return;
+
+  // Populate summary when step 4 becomes visible — hook into goToStep
+  const origGoToStep = window.goToStep;
+  window.goToStep = function(step) {
+    origGoToStep(step);
+    if (step === 4 && state.selectedPacket) {
+      const select = document.getElementById('target-app-select');
+      const appLabel = select.options[select.selectedIndex]
+        ? select.options[select.selectedIndex].text
+        : state.selectedAppId;
+      document.getElementById('summary-packet').textContent =
+        state.selectedPacket.meta.name || state.selectedPacket.fileName;
+      document.getElementById('summary-app').textContent =
+        select.value === 'custom' ? (state.selectedAppId || 'Custom App') : appLabel;
     }
-  });
-
-  // Update Indicators
-  elements.stepIndicators.forEach((el, index) => {
-    const indicatorStep = index + 1;
-    el.classList.remove('active', 'completed');
-    if (indicatorStep < step) {
-      el.classList.add('completed');
-    } else if (indicatorStep === step) {
-      el.classList.add('active');
-    }
-  });
-
-  // Step specific preparations
-  if (step === 4) {
-    prepareStep4Summary();
-  }
-}
-
-function resetWizard() {
-  state.selectedPacket = null;
-  state.currentStep = 1;
-  elements.fileInput.value = '';
-  elements.progressContainer.style.style = 'none';
-  elements.progressBar.style.width = '0%';
-  elements.statusText.textContent = '';
-  elements.btnInstall.disabled = false;
-  elements.btnInstall.textContent = 'Confirm & Install';
-  goToStep(1);
-}
-
-function prepareStep4Summary() {
-  elements.summaryPacket.textContent = state.selectedPacket.meta.name;
-  
-  const appMap = {
-    '69fd0d1e04e347cf57ca9473': 'InstaFi',
-    '6914e9b0462bd8a9f58854bf': 'Pluto',
-    '6a0a27453fa07525d5e322b8': 'uBase',
-    '6a0757681e24239e06be7a39': 'BMail44'
   };
-  
-  const appId = state.selectedAppId;
-  const appName = appMap[appId] || `Custom (${appId.substring(0,8)}...)`;
-  elements.summaryApp.textContent = appName;
+
+  btnInstall.addEventListener('click', () => runInstall());
 }
 
-// Trigger installation process
-async function startInstallation() {
-  if (!state.apiKey) {
-    showToast('Please set your Base44 API Key in Settings first!', 'danger');
+async function runInstall() {
+  if (!state.selectedPacket) {
+    showToast('No packet loaded.', 'danger');
+    return;
+  }
+
+  const appId = state.selectedAppId ||
+    document.getElementById('target-app-select').value;
+
+  if (!appId || appId === 'custom') {
+    showToast('Please enter an App ID.', 'danger');
+    return;
+  }
+
+  const apiKey = state.apiKey || localStorage.getItem('ubase_api_key');
+  if (!apiKey) {
+    showToast('Save your Base44 API Key in Settings first.', 'danger');
     switchTab('settings');
     return;
   }
 
-  const appId = state.selectedAppId;
-  if (!appId) {
-    showToast('Please select or specify a target App ID.', 'danger');
-    return;
-  }
+  const btnInstall = document.getElementById('btn-install');
+  const btnBack = document.getElementById('btn-back-4');
+  const progressCard = document.getElementById('progress-card');
+  const progressBar = document.getElementById('progress-bar');
+  const statusText = document.getElementById('status-text');
 
-  elements.btnInstall.disabled = true;
-  elements.btnInstall.textContent = 'Installing...';
-  elements.progressContainer.style.display = 'block';
-  updateProgress(20, 'Sending to builder...');
+  btnInstall.disabled = true;
+  btnBack.disabled = true;
+  progressCard.style.display = 'block';
+
+  const setProgress = (pct, msg) => {
+    progressBar.style.width = pct + '%';
+    statusText.textContent = msg;
+  };
 
   try {
-    // 1. Send install prompt to Builder Message API
-    const response = await fetch(`https://api.base44.com/api/apps/${appId}/builder/messages`, {
+    setProgress(20, 'Connecting to Base44...');
+    await sleep(400);
+
+    setProgress(50, 'Sending install prompt...');
+
+    const agentId = '69fd12da185a6e091e5bea1c'; // xBuildy AI agent
+    const prompt = state.selectedPacket.prompt;
+    const packetName = state.selectedPacket.meta.name || 'Unknown Packet';
+
+    const body = JSON.stringify({
+      message: `Install this uBase packet into app ${appId}:\n\n${prompt}`
+    });
+
+    const response = await fetch(`https://api.base44.com/api/agents/${agentId}/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${state.apiKey}`
+        'api_key': apiKey
       },
-      body: JSON.stringify({
-        message: state.selectedPacket.prompt
-      })
+      body
     });
 
     if (!response.ok) {
-      throw new Error(`Builder API returned status ${response.status}`);
+      const errText = await response.text();
+      throw new Error(`API error ${response.status}: ${errText}`);
     }
 
-    updateProgress(50, 'Builder processing... Polling target status...');
-    
-    // 2. Poll App status to watch progress
-    const success = await pollStatus(state.apiKey, appId);
-    
-    if (success) {
-      updateProgress(100, 'Installation complete!');
-      
-      // Save history record
-      const record = {
-        packetName: state.selectedPacket.meta.name,
-        version: state.selectedPacket.meta.version,
-        targetApp: getAppNameById(appId),
-        appId: appId,
-        status: 'completed',
-        date: new Date().toLocaleString(),
-        prompt: state.selectedPacket.prompt
-      };
-      saveToHistory(record);
-      
-      // Setup step 5 screen
-      elements.successMessage.textContent = `"${state.selectedPacket.meta.name}" successfully installed into ${getAppNameById(appId)}!`;
-      
-      setTimeout(() => {
-        goToStep(5);
-      }, 1000);
-    } else {
-      throw new Error('Installation polling timed out or failed on server.');
-    }
+    setProgress(85, 'Prompt delivered! Builder is processing...');
+    await sleep(600);
+    setProgress(100, 'Done!');
+    await sleep(400);
 
+    // Save to history
+    const record = {
+      packetName,
+      appId,
+      date: new Date().toLocaleString(),
+      status: 'success'
+    };
+    state.history.unshift(record);
+    localStorage.setItem('ubase_history', JSON.stringify(state.history.slice(0, 100)));
+
+    document.getElementById('success-message').textContent =
+      `"${packetName}" was sent to the builder for app ${appId}. Check your Base44 builder for the install conversation.`;
+
+    goToStep(5);
   } catch (err) {
     console.error(err);
-    updateProgress(0, 'Failed: ' + err.message);
-    elements.btnInstall.disabled = false;
-    elements.btnInstall.textContent = 'Retry Installation';
-    showToast('Installation failed: ' + err.message, 'danger');
-    
-    // Save failed attempt to history
-    const record = {
-      packetName: state.selectedPacket ? state.selectedPacket.meta.name : 'Unknown Packet',
-      version: state.selectedPacket ? state.selectedPacket.meta.version : '1.0.0',
-      targetApp: getAppNameById(appId),
-      appId: appId,
-      status: 'failed',
-      date: new Date().toLocaleString(),
-      prompt: state.selectedPacket ? state.selectedPacket.prompt : ''
-    };
-    saveToHistory(record);
+    showToast('Install failed: ' + err.message, 'danger');
+    btnInstall.disabled = false;
+    btnBack.disabled = false;
+    setProgress(0, '');
+    progressCard.style.display = 'none';
   }
 }
 
-function updateProgress(percentage, statusMsg) {
-  elements.progressBar.style.width = `${percentage}%`;
-  elements.statusText.textContent = statusMsg;
-}
-
-// Poll Status helper function
-async function pollStatus(apiKey, appId, maxAttempts = 20) {
-  return new Promise((resolve) => {
-    let attempts = 0;
-    
-    const interval = setInterval(async () => {
-      attempts++;
-      updateProgress(50 + Math.min(45, attempts * 2.5), `Polling status (Attempt ${attempts}/${maxAttempts})...`);
-      
-      try {
-        const response = await fetch(`https://api.base44.com/api/apps/${appId}/status`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Assume ready/active or similar status implies completed
-          if (data.status === 'ready' || data.status === 'active' || data.status === 'completed') {
-            clearInterval(interval);
-            resolve(true);
-          } else if (data.status === 'error' || data.status === 'failed') {
-            clearInterval(interval);
-            resolve(false);
-          }
-        }
-      } catch (err) {
-        // Suppress errors during polling to avoid crashing
-        console.warn('Status poll warning: ', err);
-      }
-      
-      if (attempts >= maxAttempts) {
-        clearInterval(interval);
-        // Fallback: resolve as completed since it might have completed silently
-        resolve(true);
-      }
-    }, 3000);
-  });
-}
-
-function getAppNameById(appId) {
-  const map = {
-    '69fd0d1e04e347cf57ca9473': 'InstaFi',
-    '6914e9b0462bd8a9f58854bf': 'Pluto',
-    '6a0a27453fa07525d5e322b8': 'uBase',
-    '6a0757681e24239e06be7a39': 'BMail44'
-  };
-  return map[appId] || appId;
-}
-
-// History Storage & Rendering
+// ── HISTORY ───────────────────────────────────────────
 function setupHistory() {
-  elements.btnClearHistory.addEventListener('click', () => {
-    if (confirm('Are you sure you want to clear your installation history?')) {
-      localStorage.removeItem('ubase_install_history');
+  const btnClear = document.getElementById('btn-clear-history');
+  if (btnClear) {
+    btnClear.addEventListener('click', () => {
+      state.history = [];
+      localStorage.removeItem('ubase_history');
       renderHistory();
-      showToast('Installation history cleared.');
-    }
-  });
-}
-
-function saveToHistory(record) {
-  let history = [];
-  try {
-    history = JSON.parse(localStorage.getItem('ubase_install_history')) || [];
-  } catch (e) {
-    history = [];
+      showToast('History cleared.');
+    });
   }
-  history.unshift(record); // newest first
-  localStorage.setItem('ubase_install_history', JSON.stringify(history));
 }
 
 function renderHistory() {
-  let history = [];
-  try {
-    history = JSON.parse(localStorage.getItem('ubase_install_history')) || [];
-  } catch (e) {
-    history = [];
-  }
+  const tbody = document.getElementById('history-table-body');
+  const empty = document.getElementById('no-history-msg');
+  const table = document.getElementById('history-table');
+  if (!tbody) return;
 
-  elements.historyTableBody.innerHTML = '';
-  
-  if (history.length === 0) {
-    elements.noHistoryMsg.style.display = 'block';
-    elements.historyTableBody.parentElement.style.display = 'none';
+  if (state.history.length === 0) {
+    empty.style.display = 'block';
+    table.style.display = 'none';
     return;
   }
-  
-  elements.noHistoryMsg.style.display = 'none';
-  elements.historyTableBody.parentElement.style.display = 'table';
-  
-  history.forEach((record, index) => {
-    // Info Row
-    const row = document.createElement('tr');
-    row.className = 'expandable-row';
-    row.setAttribute('data-index', index);
-    
-    const statusBadge = record.status === 'completed' 
-      ? '<span class="badge badge-completed">Completed</span>'
-      : record.status === 'failed'
-        ? '<span class="badge badge-failed">Failed</span>'
-        : '<span class="badge badge-installing">Installing</span>';
-        
-    row.innerHTML = `
-      <td>${record.packetName}</td>
-      <td>v${record.version}</td>
-      <td>${record.targetApp}</td>
-      <td>${statusBadge}</td>
-      <td>${record.date}</td>
-    `;
-    
-    // Collapsible detail Row
-    const detailRow = document.createElement('tr');
-    detailRow.className = 'details-row';
-    detailRow.style.display = 'none';
-    detailRow.id = `detail-${index}`;
-    detailRow.innerHTML = `
-      <td colspan="5">
-        <div class="details-content">
-          <strong>Prompt details:</strong>
-          <pre style="white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; margin-top: 8px; color: #bbb; background: #000; padding: 12px; border: 1px solid #222; border-radius: 6px;">${record.prompt || 'No prompt details available'}</pre>
-        </div>
-      </td>
-    `;
-    
-    row.addEventListener('click', () => {
-      const isVisible = detailRow.style.display === 'table-row';
-      detailRow.style.display = isVisible ? 'none' : 'table-row';
-    });
-    
-    elements.historyTableBody.appendChild(row);
-    elements.historyTableBody.appendChild(detailRow);
-  });
+
+  empty.style.display = 'none';
+  table.style.display = 'table';
+  tbody.innerHTML = state.history.map(r => `
+    <tr>
+      <td>${r.packetName || '—'}</td>
+      <td style="font-family:monospace;font-size:12px;">${r.appId || '—'}</td>
+      <td>${r.date || '—'}</td>
+      <td><span class="badge badge-${r.status === 'success' ? 'success' : 'danger'}">${r.status}</span></td>
+    </tr>
+  `).join('');
 }
 
-// Deep Link listeners (Tauri specific)
-function setupDeepLinkListener() {
-  // Listen for the Tauri customized 'deep-link' emit event from the Rust core backend
-  if (window.__TAURI__) {
-    const { listen } = window.__TAURI__.event;
-    listen('deep-link', (event) => {
-      console.log('Deep Link Triggered:', event.payload);
-      handleDeepLink(event.payload);
-    });
-  }
-
-  // Pre-load UI interactions
-  elements.btnAcceptPreload.addEventListener('click', () => {
-    elements.preloadBanner.style.display = 'none';
-    if (state.deepLinkedUrl) {
-      processDeepLinkPayload(state.deepLinkedUrl);
-    }
+// ── SETTINGS ──────────────────────────────────────────
+function setupSettings() {
+  document.getElementById('btn-save-key').addEventListener('click', () => {
+    const key = document.getElementById('api-key-input').value.trim();
+    state.apiKey = key;
+    localStorage.setItem('ubase_api_key', key);
+    showToast('API Key saved!', 'success');
   });
 
-  elements.btnDismissPreload.addEventListener('click', () => {
-    elements.preloadBanner.style.display = 'none';
-    state.deepLinkedUrl = null;
-  });
-}
-
-function handleDeepLink(url) {
-  // Deep link matches: ubase://install?id=xyz
-  state.deepLinkedUrl = url;
-  elements.preloadUrlText.textContent = url;
-  elements.preloadBanner.style.display = 'flex';
-  
-  // Switch to install tab to attract user's eye
-  switchTab('install');
-}
-
-// Automatically resolve deep link target app or fetch packet
-async function processDeepLinkPayload(url) {
-  try {
-    const urlObj = new URL(url);
-    const searchParams = new URLSearchParams(urlObj.search);
-    const packetId = searchParams.get('id');
-    const targetAppId = searchParams.get('app');
-    
-    if (targetAppId) {
-      if (['69fd0d1e04e347cf57ca9473', '6914e9b0462bd8a9f58854bf', '6a0a27453fa07525d5e322b8', '6a0757681e24239e06be7a39'].includes(targetAppId)) {
-        elements.targetAppSelect.value = targetAppId;
-        state.selectedAppId = targetAppId;
-        elements.customAppGroup.style.display = 'none';
-      } else {
-        elements.targetAppSelect.value = 'custom';
-        elements.customAppGroup.style.display = 'flex';
-        elements.customAppInput.value = targetAppId;
-        state.selectedAppId = targetAppId;
-      }
-    }
-    
-    if (packetId) {
-      // Fetch details from Marketplace/Registry or populate search
-      showToast(`Resolving Deep Link packet ID: ${packetId}...`);
-      
-      // Simulate remote fetch packet structure
-      const mockFetchedPacket = {
-        meta: {
-          name: `Packet ${packetId}`,
-          version: '1.0.0',
-          author: 'Remote Registry',
-          description: `Automatically preloaded from deep link ubase://install?id=${packetId}`,
-          files: ['meta.json', 'prompt.md']
-        },
-        prompt: `Please install packet ${packetId} into this Base44 target application. This was initiated via automated protocol deep link.`,
-        fileName: `packet-${packetId}.ubase`
-      };
-      
-      state.selectedPacket = mockFetchedPacket;
-      
-      // Populate Step 2 UI directly
-      elements.packetName.textContent = mockFetchedPacket.meta.name;
-      elements.packetVersion.textContent = mockFetchedPacket.meta.version;
-      elements.packetAuthor.textContent = mockFetchedPacket.meta.author;
-      elements.packetDescription.textContent = mockFetchedPacket.meta.description;
-      
-      elements.packetFiles.innerHTML = '';
-      mockFetchedPacket.meta.files.forEach(f => {
-        const li = document.createElement('li');
-        li.textContent = f;
-        elements.packetFiles.appendChild(li);
+  document.getElementById('btn-test-connection').addEventListener('click', async () => {
+    const key = document.getElementById('api-key-input').value.trim();
+    if (!key) { showToast('Enter an API key first.', 'danger'); return; }
+    const btn = document.getElementById('btn-test-connection');
+    btn.disabled = true;
+    btn.textContent = 'Testing...';
+    try {
+      const res = await fetch('https://api.base44.com/api/agents/69fd12da185a6e091e5bea1c', {
+        headers: { 'api_key': key }
       });
-      
-      elements.promptPreview.textContent = mockFetchedPacket.prompt;
-      elements.promptPreview.setAttribute('data-full-prompt', mockFetchedPacket.prompt);
-      elements.expandPromptBtn.style.display = 'none';
-      
-      goToStep(2);
+      showToast(res.ok ? 'Connection successful!' : 'Invalid API key.', res.ok ? 'success' : 'danger');
+    } catch {
+      showToast('Network error.', 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Test Connection';
     }
-  } catch (err) {
-    console.error(err);
-    showToast('Failed to handle deep link payload.', 'danger');
-  }
+  });
 }
 
-// Toast Helper Utility
-function showToast(message, type = 'info') {
-  // Create dynamic toast or use fixed one
-  const toast = document.createElement('div');
-  toast.className = `toast`;
-  toast.textContent = message;
-  
-  if (type === 'danger') toast.style.borderLeft = '4px solid var(--danger-color)';
-  else if (type === 'success') toast.style.borderLeft = '4px solid var(--success-color)';
-  else toast.style.borderLeft = '4px solid var(--accent-color)';
-  
-  document.body.appendChild(toast);
-  
-  // Animate in
-  setTimeout(() => {
-    toast.classList.add('show');
-  }, 50);
-  
-  // Remove after 3s
-  setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => {
-      toast.remove();
-    }, 300);
-  }, 3000);
+// ── TOAST ─────────────────────────────────────────────
+function showToast(msg, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'toast ' + type;
+  toast.style.display = 'block';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 3500);
 }
 
-// Start trigger initialization
-document.addEventListener('DOMContentLoaded', init);
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
