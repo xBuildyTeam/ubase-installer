@@ -4,178 +4,357 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>uBase Installer</title>
-  <link rel="stylesheet" href="styles.css">
   <script src="jszip.min.js"></script>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --sidebar: #0f0f18;
+      --card: #14141f;
+      --border: #1e1e2e;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-glow: rgba(99,102,241,0.15);
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --success: #10b981;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      height: 100vh; display: flex; overflow: hidden; font-size: 14px;
+    }
+    .sidebar {
+      width: 220px; min-width: 220px;
+      background: var(--sidebar); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; padding: 20px 12px; gap: 4px;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px;
+    }
+    .brand-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .brand-name {
+      font-size: 16px; font-weight: 700;
+      background: linear-gradient(135deg, #a5b4fc, #7c3aed);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .brand-sub { font-size: 10px; color: var(--muted); }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px; cursor: pointer;
+      color: var(--muted); font-size: 13px; font-weight: 500;
+      border: none; background: transparent; width: 100%; text-align: left;
+      transition: all 0.15s;
+    }
+    .nav-item:hover { background: var(--card); color: var(--text); }
+    .nav-item.active {
+      background: var(--accent-glow); color: #a5b4fc;
+      border: 1px solid rgba(99,102,241,0.3);
+    }
+    .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+    .sidebar-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
+    .sidebar-footer span { font-size: 11px; color: var(--muted); padding: 0 12px; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+    .tab-pane { display: none; flex: 1; overflow: auto; height: 100%; }
+    .tab-pane.active { display: flex; flex-direction: column; }
+    #marketplace-tab { padding: 0; }
+    #marketplace-tab webview { width: 100%; height: 100%; border: none; flex: 1; }
+    .page-header { padding: 28px 32px 0; }
+    .page-header h2 { font-size: 20px; font-weight: 700; }
+    .page-header p { color: var(--muted); margin-top: 4px; font-size: 13px; }
+    .step-progress { display: flex; align-items: center; padding: 24px 32px 0; gap: 0; }
+    .step-dot { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); font-weight: 500; }
+    .step-dot .dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--card); border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; transition: all 0.2s;
+    }
+    .step-dot.active .dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .step-dot.done .dot { background: var(--success); border-color: var(--success); color: #fff; }
+    .step-dot.active { color: #a5b4fc; }
+    .step-dot.done { color: var(--success); }
+    .step-line { flex: 1; height: 2px; background: var(--border); margin: 0 8px; max-width: 48px; }
+    .step-line.done { background: var(--success); }
+    .wizard-content { flex: 1; padding: 24px 32px 32px; overflow: auto; }
+    .wizard-step { display: none; }
+    .wizard-step.active { display: block; }
+    .dropzone {
+      border: 2px dashed var(--border); border-radius: 16px;
+      padding: 64px 32px; text-align: center; cursor: pointer;
+      transition: all 0.2s; background: var(--card);
+      max-width: 600px; margin: 0 auto;
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: var(--accent-glow); }
+    .dropzone .drop-icon { font-size: 48px; margin-bottom: 16px; }
+    .dropzone h3 { font-size: 16px; margin-bottom: 8px; }
+    .dropzone p { color: var(--muted); font-size: 13px; }
+    .btn-browse {
+      display: inline-block; margin-top: 20px; padding: 8px 20px; border-radius: 8px;
+      background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+      border: none; cursor: pointer;
+    }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+    .card h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+    .card h4 { font-size: 11px; font-weight: 600; margin-bottom: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .meta-item label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px; }
+    .meta-item value { font-size: 14px; font-weight: 500; }
+    .file-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .file-tag {
+      background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.3);
+      color: #a5b4fc; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-family: monospace;
+    }
+    .prompt-preview {
+      background: #0d0d1a; border: 1px solid var(--border); border-radius: 8px; padding: 16px;
+      font-family: monospace; font-size: 12px; color: #94a3b8; line-height: 1.6;
+      white-space: pre-wrap; max-height: 160px; overflow: hidden; position: relative;
+    }
+    .prompt-preview.expanded { max-height: none; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+    .form-control {
+      width: 100%; padding: 10px 14px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 14px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-control:focus { border-color: var(--accent); }
+    select.form-control option { background: var(--card); }
+    .btn {
+      padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      border: none; cursor: pointer; transition: all 0.15s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); color: #a5b4fc; }
+    .btn-large { padding: 12px 28px; font-size: 15px; border-radius: 10px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .action-row { display: flex; gap: 10px; margin-top: 20px; align-items: center; }
+    .progress-wrap { background: var(--border); border-radius: 99px; height: 6px; overflow: hidden; margin: 12px 0; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), #8b5cf6); border-radius: 99px; transition: width 0.3s; }
+    .success-screen { text-align: center; padding: 48px 32px; }
+    .success-screen .success-icon { font-size: 56px; margin-bottom: 16px; }
+    .success-screen h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .success-screen p { color: var(--muted); margin-bottom: 24px; }
+    .history-empty { text-align: center; padding: 64px 32px; color: var(--muted); }
+    .history-empty .icon { font-size: 40px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 10px 16px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    tr:hover td { background: var(--card); }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .badge-success { background: rgba(16,185,129,0.15); color: var(--success); }
+    .badge-danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500;
+      display: none; z-index: 9999; max-width: 320px;
+    }
+    .toast.info { background: #1e1b4b; border: 1px solid var(--accent); color: #a5b4fc; }
+    .toast.success { background: #064e3b; border: 1px solid var(--success); color: #6ee7b7; }
+    .toast.danger { background: #450a0a; border: 1px solid var(--danger); color: #fca5a5; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
 </head>
 <body>
-  <div class="app-layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="logo-area">
-        <img src="https://ubase.tech/logo.png" onerror="this.style.display='none'" alt="" style="width:32px;height:32px;border-radius:6px;">
-        <span class="logo-text">uBase</span>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">📦</div>
+      <div>
+        <div class="brand-name">uBase</div>
+        <div class="brand-sub">Installer</div>
       </div>
-      <nav class="sidebar-nav">
-        <button class="nav-item active" data-tab="marketplace">🌐 Marketplace</button>
-        <button class="nav-item" data-tab="install">📦 Install Packet</button>
-        <button class="nav-item" data-tab="history">📋 History</button>
-        <button class="nav-item" data-tab="settings">⚙️ Settings</button>
-      </nav>
-      <div class="sidebar-footer">
-        <span>v1.0.0</span>
+    </div>
+    <button class="nav-item active" data-tab="marketplace"><span class="nav-icon">🌐</span> Marketplace</button>
+    <button class="nav-item" data-tab="install"><span class="nav-icon">📦</span> Install Packet</button>
+    <button class="nav-item" data-tab="history"><span class="nav-icon">📋</span> History</button>
+    <button class="nav-item" data-tab="settings"><span class="nav-icon">⚙️</span> Settings</button>
+    <div class="sidebar-footer"><span>v1.0.0</span></div>
+  </aside>
+
+  <main class="main">
+
+    <!-- MARKETPLACE -->
+    <div id="marketplace-tab" class="tab-pane active">
+      <webview src="https://ubase.tech" style="width:100%;height:100%;border:none;flex:1;"></webview>
+    </div>
+
+    <!-- INSTALL -->
+    <div id="install-tab" class="tab-pane">
+      <div class="page-header">
+        <h2>Install a Packet</h2>
+        <p>Drop a .ubase file to install it into any Base44 app.</p>
       </div>
-    </aside>
 
-    <!-- Main Content -->
-    <main class="main-content">
-
-      <!-- Marketplace Tab -->
-      <div id="marketplace-tab" class="tab-pane active">
-        <webview id="marketplace-webview" src="https://ubase.tech" style="width:100%;height:100%;border:none;"></webview>
+      <div class="step-progress">
+        <div class="step-dot active" id="sp-1"><div class="dot">1</div><span>Upload</span></div>
+        <div class="step-line" id="sl-1"></div>
+        <div class="step-dot" id="sp-2"><div class="dot">2</div><span>Preview</span></div>
+        <div class="step-line" id="sl-2"></div>
+        <div class="step-dot" id="sp-3"><div class="dot">3</div><span>Target App</span></div>
+        <div class="step-line" id="sl-3"></div>
+        <div class="step-dot" id="sp-4"><div class="dot">4</div><span>Install</span></div>
+        <div class="step-line" id="sl-4"></div>
+        <div class="step-dot" id="sp-5"><div class="dot">5</div><span>Done</span></div>
       </div>
 
-      <!-- Install Tab -->
-      <div id="install-tab" class="tab-pane">
-        <div class="tab-header">
-          <h2>Install a Packet</h2>
-          <p>Drag and drop a <code>.ubase</code> file to install it into your Base44 app.</p>
-        </div>
+      <div class="wizard-content">
 
-        <!-- Deep link preload banner -->
-        <div id="preload-banner" class="alert alert-info" style="display:none;">
-          <span>📦 Packet preloaded from marketplace: <strong id="preload-url-text"></strong></span>
-          <button id="btn-accept-preload" class="btn btn-sm btn-primary">Load It</button>
-          <button id="btn-dismiss-preload" class="btn btn-sm btn-secondary">Dismiss</button>
-        </div>
-
-        <!-- Wizard Steps -->
-        <div class="wizard-steps">
-          <div class="step-indicator active" data-step="1">1. Upload</div>
-          <div class="step-indicator" data-step="2">2. Preview</div>
-          <div class="step-indicator" data-step="3">3. Target App</div>
-          <div class="step-indicator" data-step="4">4. Install</div>
-          <div class="step-indicator" data-step="5">5. Done</div>
-        </div>
-
-        <!-- Step 1: Dropzone -->
         <div class="wizard-step active" id="step-1">
           <div class="dropzone" id="dropzone">
-            <div class="dropzone-inner">
-              <div class="drop-icon">📦</div>
-              <p>Drag & drop a <code>.ubase</code> file here</p>
-              <p class="text-muted">or click to browse</p>
-            </div>
+            <div class="drop-icon">📦</div>
+            <h3>Drop your .ubase file here</h3>
+            <p>Supports .ubase and .zip packet formats</p>
+            <button class="btn-browse">Browse Files</button>
           </div>
           <input type="file" id="file-input" accept=".ubase,.zip" style="display:none;">
         </div>
 
-        <!-- Step 2: Preview -->
         <div class="wizard-step" id="step-2">
-          <div class="packet-meta card">
-            <h3 id="packet-name">Packet Name</h3>
-            <div class="meta-row"><span>Version:</span> <strong id="packet-version"></strong></div>
-            <div class="meta-row"><span>Author:</span> <strong id="packet-author"></strong></div>
-            <div class="meta-row"><span>Description:</span> <span id="packet-description"></span></div>
-            <div class="meta-row"><span>Files:</span> <ul id="packet-files"></ul></div>
+          <div class="card">
+            <div class="meta-grid">
+              <div class="meta-item"><label>Packet Name</label><value id="packet-name">—</value></div>
+              <div class="meta-item"><label>Version</label><value id="packet-version">—</value></div>
+              <div class="meta-item"><label>Author</label><value id="packet-author">—</value></div>
+              <div class="meta-item"><label>Description</label><value id="packet-description" style="font-size:13px;">—</value></div>
+            </div>
+            <div style="margin-top:16px;">
+              <h4>Files in Packet</h4>
+              <div class="file-list" id="packet-files"></div>
+            </div>
           </div>
           <div class="card">
-            <div class="card-header">
-              <h4>Install Prompt Preview</h4>
-              <button id="expand-prompt-btn" class="btn btn-sm btn-secondary" style="display:none;">Expand</button>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <h4 style="margin:0;">Install Prompt Preview</h4>
+              <button id="expand-prompt-btn" class="btn btn-secondary" style="padding:4px 12px;font-size:11px;display:none;">Expand</button>
             </div>
-            <pre id="prompt-preview" class="prompt-preview collapsed"></pre>
+            <pre class="prompt-preview collapsed" id="prompt-preview"></pre>
           </div>
-          <div class="wizard-actions">
-            <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
-            <button class="btn btn-primary" onclick="goToStep(3)">Continue →</button>
+          <div class="action-row">
+            <button class="btn btn-secondary" onclick="goToStep(1)">&#8592; Back</button>
+            <button class="btn btn-primary" onclick="goToStep(3)">Continue &#8594;</button>
           </div>
         </div>
 
-        <!-- Step 3: Target App -->
         <div class="wizard-step" id="step-3">
-          <div class="card">
+          <div class="card" style="max-width:560px;">
             <h3>Select Target App</h3>
-            <p class="text-muted">Which Base44 app should this packet be installed into?</p>
-            <select id="target-app-select" class="form-control">
-              <option value="custom">Enter App ID manually...</option>
-            </select>
-            <div id="custom-app-group" style="margin-top:1rem;">
+            <p style="color:var(--muted);font-size:13px;margin-bottom:20px;">Which Base44 app should receive this packet?</p>
+            <div class="form-group">
+              <label>App</label>
+              <select id="target-app-select" class="form-control">
+                <option value="69fd0d1e04e347cf57ca9473">InstaFi</option>
+                <option value="6a0a27453fa07525d5e322b8">uBase</option>
+                <option value="6a0757681e24239e06be7a39">BMail44</option>
+                <option value="custom">Enter App ID manually...</option>
+              </select>
+            </div>
+            <div class="form-group" id="custom-app-group" style="display:none;">
               <label>App ID</label>
               <input type="text" id="custom-app-input" class="form-control" placeholder="e.g. 69fd0d1e04e347cf57ca9473">
             </div>
           </div>
-          <div class="wizard-actions">
-            <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
-            <button class="btn btn-primary" onclick="goToStep(4)">Continue →</button>
+          <div class="action-row">
+            <button class="btn btn-secondary" onclick="goToStep(2)">&#8592; Back</button>
+            <button class="btn btn-primary" onclick="goToStep(4)">Continue &#8594;</button>
           </div>
         </div>
 
-        <!-- Step 4: Confirm & Install -->
         <div class="wizard-step" id="step-4">
-          <div class="card">
+          <div class="card" style="max-width:560px;">
             <h3>Confirm Installation</h3>
-            <div class="meta-row"><span>Packet:</span> <strong id="summary-packet"></strong></div>
-            <div class="meta-row"><span>Target App:</span> <strong id="summary-app"></strong></div>
+            <table style="margin-top:8px;">
+              <tr>
+                <td style="color:var(--muted);width:120px;border:none;padding:8px 0;">Packet</td>
+                <td style="border:none;padding:8px 0;font-weight:600;" id="summary-packet">—</td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted);border:none;padding:8px 0;">Target App</td>
+                <td style="border:none;padding:8px 0;font-weight:600;" id="summary-app">—</td>
+              </tr>
+            </table>
           </div>
-          <div class="progress-container" style="display:none;">
-            <div class="progress-bar-wrap"><div id="progress-bar" class="progress-bar" style="width:0%"></div></div>
-            <p id="status-text" class="text-muted"></p>
+          <div class="card" id="progress-card" style="max-width:560px;display:none;">
+            <p id="status-text" style="color:var(--muted);font-size:13px;margin-bottom:8px;">Installing...</p>
+            <div class="progress-wrap"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
           </div>
-          <div class="wizard-actions">
-            <button class="btn btn-secondary" onclick="goToStep(3)">← Back</button>
-            <button id="btn-install" class="btn btn-primary btn-large">🚀 Install Now</button>
+          <div class="action-row">
+            <button class="btn btn-secondary" id="btn-back-4" onclick="goToStep(3)">&#8592; Back</button>
+            <button class="btn btn-primary btn-large" id="btn-install">&#128640; Install Now</button>
           </div>
         </div>
 
-        <!-- Step 5: Success -->
         <div class="wizard-step" id="step-5">
           <div class="success-screen">
-            <div class="success-icon">✅</div>
+            <div class="success-icon">&#9989;</div>
             <h2>Packet Installed!</h2>
-            <p id="success-message"></p>
-            <div class="wizard-actions">
-              <button class="btn btn-primary" onclick="resetWizard()">Install Another</button>
+            <p id="success-message">The builder is now processing your packet.</p>
+            <div class="action-row" style="justify-content:center;">
+              <button class="btn btn-primary btn-large" onclick="resetWizard()">Install Another</button>
               <button class="btn btn-secondary" id="btn-view-history">View History</button>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- History Tab -->
-      <div id="history-tab" class="tab-pane">
-        <div class="tab-header">
-          <h2>Installation History</h2>
-          <button id="btn-clear-history" class="btn btn-secondary btn-sm">Clear History</button>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div id="history-tab" class="tab-pane">
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;padding-bottom:20px;">
+        <div><h2>Installation History</h2><p>All packets you have installed.</p></div>
+        <button id="btn-clear-history" class="btn btn-secondary">Clear History</button>
+      </div>
+      <div style="padding:0 32px;">
+        <div class="history-empty" id="no-history-msg">
+          <div class="icon">&#128237;</div>
+          <p>No installations yet.</p>
         </div>
-        <p id="no-history-msg" class="text-muted">No installations yet.</p>
-        <table class="history-table" style="display:none;">
+        <table id="history-table" style="display:none;">
           <thead><tr><th>Packet</th><th>App ID</th><th>Date</th><th>Status</th></tr></thead>
           <tbody id="history-table-body"></tbody>
         </table>
       </div>
+    </div>
 
-      <!-- Settings Tab -->
-      <div id="settings-tab" class="tab-pane">
-        <div class="tab-header">
-          <h2>Settings</h2>
-        </div>
-        <div class="card">
+    <!-- SETTINGS -->
+    <div id="settings-tab" class="tab-pane">
+      <div class="page-header">
+        <h2>Settings</h2>
+        <p>Configure your Base44 connection.</p>
+      </div>
+      <div style="padding:24px 32px;">
+        <div class="card" style="max-width:520px;">
           <h3>Base44 API Key</h3>
-          <p class="text-muted">Required to send install prompts to your Base44 apps.</p>
-          <input type="password" id="api-key-input" class="form-control" placeholder="Enter your Base44 API key...">
-          <div class="wizard-actions" style="margin-top:1rem;">
+          <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Required to send install prompts to your Base44 apps via the Agent API.</p>
+          <div class="form-group">
+            <label>API Key</label>
+            <input type="password" id="api-key-input" class="form-control" placeholder="Enter your Base44 API key...">
+          </div>
+          <div class="action-row">
             <button id="btn-save-key" class="btn btn-primary">Save Key</button>
             <button id="btn-test-connection" class="btn btn-secondary">Test Connection</button>
           </div>
         </div>
       </div>
+    </div>
 
-    </main>
-  </div>
+  </main>
 
-  <!-- Toast -->
-  <div id="toast" class="toast" style="display:none;"></div>
-
+  <div id="toast" class="toast"></div>
   <script src="main.js"></script>
 </body>
 </html>
